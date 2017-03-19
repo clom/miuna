@@ -58,12 +58,41 @@ class CallbackController extends Controller
                 Log::info('Non text message has come');
                 continue;
             }
-            $replyText = $event->getText();
+            // get Text
+            $replyText = $this->docomo_talk($event->getText());
+
+
             Log::info('Reply text: ' . $replyText);
             $resp = $bot->replyText($event->getReplyToken(), $replyText);
             Log::info($resp->getHTTPStatus() . ': ' . $resp->getRawBody());
         }
 
         return response()->json([], 200);
+    }
+
+    private function docomo_talk($send_message) {
+        // docomo chatAPI
+        $api_key = env('DOCOMO_API_KEY');;
+        $api_url = 'https://api.apigw.smt.docomo.ne.jp/dialogue/v1/dialogue?APIKEY='.$api_key;
+        //$req_body = array('utt' => $text);
+        $req_body = Array();
+        $req_body['utt'] = $send_message;
+        $req_body['t'] = 20;
+
+        $headers = array(
+            'Content-Type: application/json; charset=UTF-8',
+        );
+        $options =  json_encode($req_body);
+
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, $api_url);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $options);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // 証明書の検証を行わない
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+        $res = json_decode(curl_exec($curl));
+        return $res->utt;
     }
 }
