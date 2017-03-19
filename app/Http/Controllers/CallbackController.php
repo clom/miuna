@@ -58,6 +58,13 @@ class CallbackController extends Controller
                 Log::info('Non text message has come');
                 continue;
             }
+
+            // USER info
+            $profileData = $bot->getProfile($event->getUserId());
+            if ($profileData->isSucceeded()) {
+                $profile = $profileData->getJSONDecodedBody();
+            }
+
             $replyText = $event->getText();
             Log::info('Reply text: ' . $replyText);
             $resp = $bot->replyText($event->getReplyToken(), $replyText);
