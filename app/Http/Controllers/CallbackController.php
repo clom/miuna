@@ -65,13 +65,14 @@ class CallbackController extends Controller
             }
 
             // USER info
-            $profileData = $bot->getProfile($event->getUserId());
+            $user_id = $event->getUserId();
+            $profileData = $bot->getProfile($user_id);
             if ($profileData->isSucceeded()) {
                 $profile = $profileData->getJSONDecodedBody();
             }
 
             // get Text
-            $replyText = $this->docomo_talk($event->getText());
+            $replyText = $this->docomo_talk($event->getText(), $user_id);
 
             Log::info('Reply text: ' . $replyText);
             $resp = $bot->replyText($event->getReplyToken(), $replyText);
@@ -81,15 +82,24 @@ class CallbackController extends Controller
         return response()->json([], 200);
     }
 
-    private function docomo_talk($send_message) {
+    private function docomo_talk($send_message, $id) {
         // docomo chatAPI
         $api_key = env('DOCOMO_API_KEY');;
         $api_url = 'https://api.apigw.smt.docomo.ne.jp/dialogue/v1/dialogue?APIKEY='.$api_key;
 
+
+        // conversation Log
+        $redis = new Client('tcp://'.env('REDIS_URL').':'.env('REDIS_PORT'));
+        if($redis->exists($id))
+            $context = $redis->get($id);
+        else
+            $context = "";
+
         // chat framework
         $req_body = Array();
         $req_body['utt'] = $send_message;
-        $req_body['t'] = 20;
+        $req_body['context'] = $context;
+        $req_body['t'] = 0;
 
         $headers = array(
             'Content-Type: application/json; charset=UTF-8',
@@ -105,6 +115,13 @@ class CallbackController extends Controller
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
 
         $res = json_decode(curl_exec($curl));
+
+        if(!empty($res)){
+            $redis->set($id, $res->context);
+            $redis->expire($id, 120);
+        }
+
+
         return $res->utt;
     }
 }
