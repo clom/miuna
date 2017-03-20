@@ -9,6 +9,10 @@
 namespace App\Http\Controllers;
 
 
+use Illuminate\Queue\Connectors\RedisConnector;
+use Illuminate\Redis\Connections\PredisConnection;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Redis;
 use LINE\LINEBot;
 use LINE\LINEBot\HTTPClient\CurlHTTPClient;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +24,7 @@ use LINE\LINEBot\Exception\InvalidEventRequestException;
 use LINE\LINEBot\Exception\InvalidSignatureException;
 use LINE\LINEBot\Exception\UnknownEventTypeException;
 use LINE\LINEBot\Exception\UnknownMessageTypeException;
+use Predis\Client;
 
 
 class CallbackController extends Controller
@@ -74,7 +79,8 @@ class CallbackController extends Controller
         // docomo chatAPI
         $api_key = env('DOCOMO_API_KEY');;
         $api_url = 'https://api.apigw.smt.docomo.ne.jp/dialogue/v1/dialogue?APIKEY='.$api_key;
-        //$req_body = array('utt' => $text);
+
+        // chat framework
         $req_body = Array();
         $req_body['utt'] = $send_message;
         $req_body['t'] = 20;
