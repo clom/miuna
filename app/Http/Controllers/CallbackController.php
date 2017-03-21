@@ -9,10 +9,6 @@
 namespace App\Http\Controllers;
 
 
-use Illuminate\Queue\Connectors\RedisConnector;
-use Illuminate\Redis\Connections\PredisConnection;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Redis;
 use LINE\LINEBot;
 use LINE\LINEBot\HTTPClient\CurlHTTPClient;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +21,9 @@ use LINE\LINEBot\Exception\InvalidSignatureException;
 use LINE\LINEBot\Exception\UnknownEventTypeException;
 use LINE\LINEBot\Exception\UnknownMessageTypeException;
 use Predis\Client;
+use LINE\LINEBot\MessageBuilder\MultiMessageBuilder;
+use LINE\LINEBot\MessageBuilder\ImageMessageBuilder;
+use LINE\LINEBot\MessageBuilder\TextMessageBuilder;
 
 
 class CallbackController extends Controller
@@ -55,14 +54,6 @@ class CallbackController extends Controller
         }
 
         foreach ($events as $event) {
-            if (!($event instanceof MessageEvent)) {
-                Log::info('Non message event has come');
-                continue;
-            }
-            if (!($event instanceof TextMessage)) {
-                Log::info('Non text message has come');
-                continue;
-            }
 
             // USER info
             $user_id = $event->getUserId();
@@ -70,13 +61,41 @@ class CallbackController extends Controller
             if ($profileData->isSucceeded()) {
                 $profile = $profileData->getJSONDecodedBody();
             }
+            if($event->getType() == 'beacon'){
+                // got beaconevent
+                if($event->getBeaconEventType() == 'enter') {
+                    $msg = new MultiMessageBuilder();
+                    $msg->add(new TextMessageBuilder('beacon により'.$profile['displayName'].'さんが近くに居ることを通知しました。'));
+                    $msg->add(new ImageMessageBuilder('https://goo.gl/FgHe12', 'https://goo.gl/FgHe12'));
+                    $this->pushDiscord($profile['displayName'].'さんが来ました。', $profile['pictureUrl']);
+                } else if($event->getBeaconEventType() == 'leave') {
+                    $msg = new MultiMessageBuilder();
+                    $msg->add(new TextMessageBuilder('beacon により'.$profile['displayName'].'さんが遠ざかったことを通知しました。'));
+                    $msg->add(new ImageMessageBuilder('https://goo.gl/aLVqkI', 'https://goo.gl/aLVqkI'));
+                } else {
+                    $msg = new MultiMessageBuilder();
+                    $msg->add(new TextMessageBuilder('beacon!'));
+                }
 
-            // get Text
-            $replyText = $this->docomo_talk($event->getText(), $user_id);
+                $resp = $bot->replyMessage($event->getReplyToken(), $msg);
+            }else {
+                if (!($event instanceof MessageEvent)) {
+                    Log::info('Non message event has come');
+                    continue;
+                }
+                if (!($event instanceof TextMessage)) {
+                    Log::info('Non text message has come');
+                    continue;
+                }
 
-            Log::info('Reply text: ' . $replyText);
-            $resp = $bot->replyText($event->getReplyToken(), $replyText);
-            Log::info($resp->getHTTPStatus() . ': ' . $resp->getRawBody());
+                // get Text
+                $replyText = $this->docomo_talk($event->getText(), $user_id);
+
+                Log::info('Reply text: ' . $replyText);
+                $resp = $bot->replyText($event->getReplyToken(), $replyText);
+
+                Log::info($resp->getHTTPStatus() . ': ' . $resp->getRawBody());
+            }
         }
 
         return response()->json([], 200);
@@ -124,4 +143,38 @@ class CallbackController extends Controller
 
         return $res->utt;
     }
+
+    private function pushDiscord($msg, $profile_img){
+        // Discord Webhook
+        $hook_url = env('DISCORD_WEBHOOK');
+
+        $options = [];
+        $embed = [];
+        $thumbnail = [];
+
+        $thumbnail['url'] = $profile_img.'.png';
+
+        $embed[0]['title'] = 'incoming Event!';
+        $embed[0]['description'] = $msg;
+        $embed[0]['url'] = 'https://www.google.com';
+        $embed[0]['thumbnail'] = $thumbnail;
+        $embed[0]['type'] = 'rich';
+
+        $options['embeds'] = $embed;
+        $options['username'] = 'Miuna Shiodome';
+
+        $req = json_encode($options);
+
+        Log::info($req);
+
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, $hook_url);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $req);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // 証明書の検証を行わない
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+        $res = json_decode(curl_exec($curl));
+    }
+
 }
