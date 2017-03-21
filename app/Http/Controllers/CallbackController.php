@@ -159,6 +159,7 @@ class CallbackController extends Controller
         $embed[0]['url'] = 'https://www.google.com';
         $embed[0]['thumbnail'] = $thumbnail;
         $embed[0]['type'] = 'rich';
+        $embed[0]['color'] = hexdec('7289DA');
 
         $options['embeds'] = $embed;
         $options['username'] = 'Miuna Shiodome';
